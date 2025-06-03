@@ -52,8 +52,49 @@ def generate(imagem_bytes, type):
     )
 
     return resposta.text
- 
- 
+
+
+INSTRUCOES_LATEX = """
+A partir do texto que vou fornecer, estruture um código LaTeX com uma formatação limpa,
+organizada e visualmente agradável (seguindo boas práticas de formatação de documentos).
+Não deve modificar o conteúdo do texto de forma alguma.
+A saída deve ser todo esse texto em LaTeX completo, pronto para compilar.
+Não coloque nenhum texto adicional, apenas o código LaTeX. Não use ```latex antes do texto e nem ``` no final.
+Use uma estrutura básica de documento LaTeX, incluindo:
+- `\documentclass{article}`
+"""
+
+def estruturar_latex(texto: str) -> str:
+    """
+    Recebe um texto bruto e retorna um código LaTeX completo,
+    sem alterar o conteúdo, apenas adicionando toda a estrutura
+    (documentclass, pacotes, seções, etc.) de forma organizada.
+    """
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    model = "gemini-2.5-flash-preview-05-20"
+
+    # monta o conteúdo do prompt, unindo instruções e seu texto
+    combined_prompt = f"{INSTRUCOES_LATEX}\n\nTexto de entrada:\n{texto}"
+
+    contents = [
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=combined_prompt)]
+        )
+    ]
+
+    config = types.GenerateContentConfig(
+        response_mime_type="text/plain"
+    )
+
+    # faz a chamada e já pega a resposta toda
+    resposta = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=config,
+    )
+
+    return resposta.text
 
 
 imagens_carregadas = st.file_uploader(
@@ -80,37 +121,40 @@ with col1:
 #         # Exibe a imagem carregada. Para PDF, mostrará apenas a primeira página.
 #         st.image(imagens_carregadas, caption="Sua imagem carregada")#, width =300)
 
-with col2:  
-    if st.button("Processar Imagem e Gerar LaTeX", key="process_button"):
+with col2:
+    if imagens_carregadas and len(imagens_carregadas) > 0:  
+        if st.button("Processar Imagem e Gerar LaTeX", key="process_button"):
             # Garante que o arquivo foi carregado antes de processa
-        saidas = ''  # Variável para armazenar as saídas LaTeX
-        for i, imagem_carregada in enumerate(imagens_carregadas):
-            
-            if imagem_carregada.getvalue():
+            saidas = ''  # Variável para armazenar as saídas LaTeX
+            for i, imagem_carregada in enumerate(imagens_carregadas):
                 
-                with st.spinner(f"Convertendo texto da página {i+1} para LaTeX...", show_time=True):
-                    file_bytes = imagem_carregada.getvalue()
-                    try: 
-                        saida = generate(file_bytes, type=imagem_carregada.type)
-                        saidas += saida + "\n\n"
-                    except Exception as e:
-                        st.error(f"Erro ao processar a imagem: {e}")
-                            
-            else:
-                    st.warning("Nenhum arquivo válido foi carregado para processamento.")
+                if imagem_carregada.getvalue():
+                    
+                    with st.spinner(f"Convertendo texto da página {i+1} para LaTeX...", show_time=True):
+                        file_bytes = imagem_carregada.getvalue()
+                        try: 
+                            saida = generate(file_bytes, type=imagem_carregada.type)
+                            saidas += saida + "\n\n"
+                        except Exception as e:
+                            st.error(f"Erro ao processar a imagem: {e}")
+                                
+                else:
+                        st.warning("Nenhum arquivo válido foi carregado para processamento.")
 
-        # Exibir o resultado em LaTeX
-        st.markdown("---")
-        st.subheader("Resultado em LaTeX:")             
-        st.markdown(saidas)
-        st.code(saidas)
-        # Baixar o resultado em LaTeX
-        st.download_button(
-                        label="Baixar Resultado em LaTeX",
-                        data=saidas,
-                        file_name="resultado_latex.tex",
-                        mime="text/latex"
-                    )       
+            # Exibir o resultado em LaTeX
+            st.markdown("---")
+            st.subheader("Resultado em LaTeX:")             
+            # st.markdown(saidas)
+            st.code(saidas)
+            # Baixar o resultado em LaTeX
+            saida_final = estruturar_latex(saidas)
+
+            st.download_button(
+                label="Baixar código LaTeX",
+                data=saida_final,            # sua string de texto
+                file_name="relatorio.txt",   # extensão .txt
+                mime="text/plain",           
+            )
     else:
         st.info("Por favor, carregue uma imagem ou um arquivo PDF para começar.")
 
